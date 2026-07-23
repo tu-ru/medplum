@@ -19,10 +19,15 @@ export type KhieIntervention = {
   interventionCode?: string;
   fund?: string;
   accessPoint?: 'OP' | 'IP' | string;
-  paymentMechanism?: 'CAPITATION' | 'FEE_FOR_SERVICE' | string;
+  paymentMechanism?: 'CAPITATION' | 'FEE_FOR_SERVICE' | 'PER_DIEM' | string;
   needsPreauth?: boolean;
   needsManualPreauthApproval?: boolean;
   needsDoctorAuthorization?: boolean;
+  level2Tariff?: number;
+  level3Tariff?: number;
+  level4Tariff?: number;
+  level5Tariff?: number;
+  level6Tariff?: number;
   requiredPreauthDocumentTypes?: string[];
   optionalPreauthDocumentTypes?: string[];
   diagnosisList?: string[];
@@ -65,6 +70,10 @@ export class KhieClient {
     return this.post('/claims/otp', body);
   }
 
+  async sendDischargeOtp(body: JsonObject): Promise<JsonObject> {
+    return this.post('/claims/otp/discharge', body);
+  }
+
   async authorize(body: JsonObject): Promise<JsonObject> {
     return this.post('/claims/authorize', body);
   }
@@ -83,6 +92,33 @@ export class KhieClient {
 
   async submitClaim(body: JsonObject): Promise<JsonObject> {
     return this.post('/claims/submit', body);
+  }
+
+  async dischargePatient(body: JsonObject): Promise<JsonObject> {
+    return this.post('/claims/discharge', body);
+  }
+
+  async switchIntervention(body: JsonObject): Promise<JsonObject> {
+    return this.post('/claims/interventions/switch', body);
+  }
+
+  async createEmergencyClaim(body: JsonObject): Promise<JsonObject> {
+    return this.post('/claims/emergency', body);
+  }
+
+  async sendDoctorConsent(body: JsonObject): Promise<JsonObject> {
+    return this.post('/claims/doctor-consent', body);
+  }
+
+  async getEmergencyProtocols(interventionCode: string, active?: boolean): Promise<JsonObject> {
+    return this.get('/claims/emergency/protocols', {
+      intervention_code: interventionCode,
+      ...(active === undefined ? {} : { active: String(active) }),
+    });
+  }
+
+  async addEmergencyProtocol(body: JsonObject): Promise<JsonObject> {
+    return this.post('/claims/emergency/protocols', body);
   }
 
   async createPreauth(body: JsonObject): Promise<JsonObject> {

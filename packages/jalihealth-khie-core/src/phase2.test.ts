@@ -120,4 +120,39 @@ describe('KHIE Phase 2 configuration, resolution, and client', () => {
       expect.arrayContaining([expect.objectContaining({ path: '/tenants/token', status: 200 })])
     );
   });
+
+  test('uses the inpatient and ECCIF endpoint contracts', async () => {
+    const resolved = resolveFacilityContext({
+      selectedLocation: { reference: 'Location/central-hospital-opd' },
+      practitionerRole: seed.practitionerRoles[0],
+      organizationLocations: seed.locations,
+      resolveLocation,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'server-token', expires_in: 3600, token_type: 'Bearer' })))
+      .mockResolvedValue(new Response(JSON.stringify({ accepted: true })));
+    const client = new KhieClient(getKhieConfig({ secrets }, resolved), { fetch: fetchMock });
+
+    await client.sendDischargeOtp({ consent_token: 'consent-1' });
+    await client.dischargePatient({ consent_token: 'consent-1', discharge_date: '2026-07-23' });
+    await client.switchIntervention({ consent_token: 'consent-1', intervention_code: 'IP-02' });
+    await client.createEmergencyClaim({ beneficiary_cr_id: 'CR-123' });
+    await client.sendDoctorConsent({ consent_token: 'consent-1' });
+    await client.getEmergencyProtocols('ECCIF-01', true);
+    await client.addEmergencyProtocol({ consent_token: 'consent-1', protocol_code: 'ECCIF-01' });
+
+    expect(fetchMock.mock.calls.slice(1).map((call) => String(call[0]))).toEqual([
+      'https://mock.khie.test/api/v1/claims/otp/discharge',
+      'https://mock.khie.test/api/v1/claims/discharge',
+      'https://mock.khie.test/api/v1/claims/interventions/switch',
+      'https://mock.khie.test/api/v1/claims/emergency',
+      'https://mock.khie.test/api/v1/claims/doctor-consent',
+      'https://mock.khie.test/api/v1/claims/emergency/protocols?intervention_code=ECCIF-01&active=true',
+      'https://mock.khie.test/api/v1/claims/emergency/protocols',
+    ]);
+    expect(fetchMock.mock.calls[2][1]?.body).toBe(JSON.stringify({ consent_token: 'consent-1', discharge_date: '2026-07-23' }));
+    expect(fetchMock.mock.calls[6][1]?.body).toBeUndefined();
+    expect(fetchMock.mock.calls[7][1]?.body).toBe(JSON.stringify({ consent_token: 'consent-1', protocol_code: 'ECCIF-01' }));
+  });
 });
