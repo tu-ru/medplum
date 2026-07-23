@@ -1,0 +1,60 @@
+@startuml
+title ECCIF Emergency Claim Workflow
+autonumber
+skinparam shadowing false
+
+actor "Clinical user" as user
+participant "KhieEccifEmergencyWorkflow" as ui
+participant "ECCIF bots" as bot
+database "Medplum FHIR repository" as fhir
+participant "KHIE API" as khie
+
+user -> ui : choose identified or unidentified case\nenter emergency metadata and intervention
+
+alt identified patient
+  user -> ui : select Patient, enter beneficiary CR ID and OTP
+  ui -> bot : createEccifEmergencyClaim(patient, CR ID, OTP)
+else unidentified patient
+  ui -> bot : createEccifEmergencyClaim(no patient identity)
+  bot -> fhir : create placeholder Patient\n"Unidentified emergency patient"
+end
+
+bot -> khie : POST /claims/emergency
+khie --> bot : authorization_code
+bot -> fhir : create Claim(draft) with consent-token identifier\ncreate Task(doctor-consent-pending)\nstore intervention, identity state, facility code
+bot --> ui : payer case and patient reference
+
+opt resend doctor consent
+  user -> ui : enter doctor identification number
+  ui -> bot : resendEccifDoctorConsent
+  bot -> khie : POST /claims/doctor-consent\nwith stored consent token and intervention
+  bot -> fhir : Task = doctor-consent-resent
+end
+
+opt manage protocols
+  user -> ui : request applicable protocols
+  ui -> bot : getEccifEmergencyProtocol
+  bot -> khie : GET /claims/emergency/protocols
+  user -> ui : add protocol payload
+  ui -> bot : addEccifEmergencyProtocol
+  bot -> khie : POST /claims/emergency/protocols\nwith stored consent token
+  bot -> fhir : Task = protocols-added
+end
+
+opt identify an initially unknown patient
+  user -> ui : select Patient, enter beneficiary CR ID and OTP
+  ui -> bot : identifyEccifEmergencyPatient
+  bot -> khie : POST /claims/emergency\nwith original consent token, CR ID, OTP
+  bot -> fhir : replace Claim.patient and Task.for\nTask identity state = identified\nstore KHIE patient ID
+end
+
+user -> ui : enter discharge reason and invoice
+alt still unidentified
+  user -> ui : choose unknown-patient reason
+end
+ui -> bot : previewAndSubmitEccifClaim
+bot -> bot : require reason when Task identity state is unidentified
+bot -> khie : POST /claims/preview
+bot -> khie : POST /claims/submit
+bot -> fhir : Claim = active\nTask = completed / claim-submitted
+@enduml

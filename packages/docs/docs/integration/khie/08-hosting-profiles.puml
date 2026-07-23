@@ -1,0 +1,71 @@
+@startuml
+title Medplum Hosting and Execution Profiles
+top to bottom direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "1. Host-native development" {
+  node "Developer workstation" {
+    component "npm ci\nnpm run build:fast" as nativebuild
+    component "packages/server\nnpm run dev\n:8103" as nativeserver
+    component "packages/app\nnpm run dev\n:3000" as nativeapp
+  }
+  database "Docker PostgreSQL 16\n:5432" as nativepg
+  database "Docker Redis 7\n:6379" as nativeredis
+  nativeapp --> nativeserver
+  nativeserver --> nativepg
+  nativeserver --> nativeredis
+}
+
+package "2. Full-stack Docker Compose" {
+  node "Docker host" {
+    component "medplum-app container\nNginx, :3000" as composeapp
+    component "medplum-server container\nNode.js, :8103" as composeserver
+    database "postgres container\npersistent volume" as composepg
+    database "redis container" as composeredis
+  }
+  composeapp --> composeserver
+  composeserver --> composepg
+  composeserver --> composeredis
+}
+
+package "3. Kubernetes / Helm" {
+  node "Kubernetes namespace" {
+    component "Ingress" as ingress
+    component "Medplum server Deployment\nreplicas / autoscaling" as k8sserver
+    component "ServiceAccount\nnon-root security context\nrestricted capabilities" as security
+    component "Optional sidecars" as sidecars
+  }
+  database "Externally provisioned\nPostgreSQL" as k8spg
+  database "Externally provisioned\nRedis" as k8sredis
+  folder "S3-compatible object storage" as k8sobject
+  ingress --> k8sserver
+  security ..> k8sserver
+  sidecars ..> k8sserver
+  k8sserver --> k8spg
+  k8sserver --> k8sredis
+  k8sserver --> k8sobject
+}
+
+package "4. AWS CDK / ECS deployment route" {
+  cloud "CloudFront + static app" as cloudfront
+  cloud "Load balancer" as alb
+  component "ECS/Fargate server\nand optional worker service" as ecs
+  database "Aurora PostgreSQL" as aurora
+  database "ElastiCache Redis" as elasticache
+  folder "S3 binary and static assets" as s3
+  component "Parameter Store /\nSecrets Manager" as awssecrets
+  cloudfront --> alb
+  alb --> ecs
+  ecs --> aurora
+  ecs --> elasticache
+  ecs --> s3
+  awssecrets --> ecs : configuration and secrets
+}
+
+note bottom
+These are alternative deployment profiles. A deployment selects
+one profile and configures its own domains, TLS, database, Redis,
+binary storage, identity providers, observability, and secrets.
+end note
+@enduml

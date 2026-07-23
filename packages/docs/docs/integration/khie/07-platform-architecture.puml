@@ -1,0 +1,56 @@
+@startuml
+title Medplum Platform Architecture with KHIE Workflow Integration
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "End users\nclinicians, administrators" as users
+actor "External clinical systems\nFHIR, HL7, DICOM, webhooks" as external
+actor "On-premise devices\nand source systems" as devices
+
+cloud "Internet / private network" as network
+
+rectangle "Medplum application boundary" {
+  component "Web application\nReact static application\nNginx in container deployments" as app
+  component "FHIR API server\nNode.js / Express\nFHIR R4 API, authentication,\nresource and binary operations" as server
+  component "Bot runtime\nVM-context default in supplied\nlocal configuration\noptional cloud/serverless runtime" as bots
+  component "KHIE workflow packages\ncore client + bots + React UI" as khie
+  component "Medplum Agent (optional)\nOn-premise connectivity\nHL7/device bridge" as agent
+  database "PostgreSQL\nFHIR resources and application data" as postgres
+  database "Redis\ncache and background queueing" as redis
+  folder "Binary storage\nlocal file or configured object storage" as binary
+  component "OpenTelemetry instrumentation" as otel
+}
+
+cloud "KHIE APIs\nOAuth token endpoint\nclaims and preauth endpoints" as khieapi
+cloud "Observability backend\noperator selected" as observability
+
+users --> network
+network --> app : HTTPS browser session
+app --> server : FHIR API / OAuth flows
+external --> server : configured integration interfaces
+devices --> agent : site-local protocols
+agent --> server : authenticated agent connection
+server --> postgres : persistent FHIR and application data
+server --> redis : cache and jobs
+server --> binary : Binary resources
+server --> bots : bot execution and triggers
+app --> khie : reusable workflow components
+khie --> bots : execute KHIE workflow bots
+bots --> postgres : Claim, Task, Encounter,\nCoverage, Patient updates
+bots --> khieapi : authenticated KHIE REST calls
+server --> otel : service metrics and traces
+otel --> observability : exported telemetry
+
+note bottom of app
+The application package is a static React build.
+The KHIE UI components are reusable package exports,
+not a separate application server.
+end note
+
+note bottom of bots
+Bot runtime selection is configuration and deployment dependent.
+The full-stack Docker example enables VM-context bots.
+end note
+@enduml

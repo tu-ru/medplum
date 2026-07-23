@@ -1,0 +1,76 @@
+@startuml
+title KHIE Payer-Case State and Evidence Model
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class "Patient" as patient {
+  id
+  active
+  name
+}
+
+class "PractitionerRole" as role {
+  practitioner
+  organization
+  location[*]
+}
+
+class "Location" as location {
+  KHIE facility identifier
+  integration extension
+  enabled
+  status
+}
+
+class "Encounter" as encounter {
+  status
+  subject -> Patient
+  location[*]
+}
+
+class "Coverage" as coverage {
+  status = active
+  beneficiary -> Patient
+  KHIE coverage identifier
+}
+
+class "Claim" as claim {
+  status: draft -> active
+  patient -> Patient
+  facility -> Location
+  identifier[KHIE consent token]
+}
+
+class "Task" as task {
+  status: ready/in-progress/completed
+  focus -> Claim
+  for -> Patient
+  businessStatus
+  input: KHIE patient ID
+  input: intervention code
+  input: facility code
+  input: ECCIF identity state
+}
+
+role --> location : assigned to / default
+encounter --> patient : subject
+encounter --> location : active / completed location history
+coverage --> patient : beneficiary
+claim --> patient : patient
+claim --> location : facility
+task --> claim : focus
+task --> patient : for
+task --> encounter : encounter (standard cases)
+claim --> coverage : insurance (standard cases)
+
+note right of claim
+Consent token is added when KHIE returns
+an authorization or emergency code.
+end note
+
+note bottom of task
+ECCIF unknown cases begin with a placeholder Patient.
+Identification updates Claim.patient and Task.for,
+while retaining the original consent token.
+end note
+@enduml

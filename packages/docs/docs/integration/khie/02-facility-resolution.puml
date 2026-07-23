@@ -1,0 +1,46 @@
+@startuml
+title KHIE Facility Resolution and Authorization
+autonumber
+skinparam shadowing false
+
+actor "Workflow caller" as caller
+participant "KHIE bot" as bot
+participant "getKhieWorkflowContext" as context
+participant "Medplum FHIR repository" as fhir
+participant "resolveFacilityContext" as resolver
+participant "assertUserAssignedToFacility" as authz
+participant "KhieClient" as client
+
+caller -> bot : execute workflow with patient, PractitionerRole,\noptional Encounter / patient location / selected location
+bot -> context : getKhieWorkflowContext(input)
+context -> fhir : read Patient and PractitionerRole
+context -> fhir : read Encounter when supplied
+context -> fhir : search organization Locations
+context -> resolver : resolve facility
+
+note right of resolver
+Resolution order:
+1. active Encounter.location
+2. patientLocation
+3. selectedLocation
+4. PractitionerRole default Location
+5. one active organization default
+end note
+
+resolver -> resolver : traverse Location.partOf\nuntil KHIE identity is found
+alt resolved Location is inactive or KHIE-disabled
+  resolver --> context : KhieConfigurationError
+else no unambiguous active facility
+  resolver --> context : KhieConfigurationError
+else active KHIE facility resolved
+  resolver --> context : ResolvedKhieFacility
+  context -> authz : validate PractitionerRole.location
+  alt role is not assigned to facility
+    authz --> context : KhieAuthorizationError
+  else role is assigned
+    authz --> context : authorization accepted
+    context -> client : create configured client\nwith resolved facility
+    context --> bot : workflow context
+  end
+end
+@enduml

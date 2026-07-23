@@ -1,0 +1,79 @@
+@startuml
+title Platform-Wide Technical Control and Evidence Traceability
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "Implemented platform controls" {
+  rectangle "FHIR resource persistence\nand workflow state" as fhir
+  rectangle "OAuth / identity capabilities\nand project authorization" as identity
+  rectangle "Container runtime hardening\nnon-root execution" as container
+  rectangle "Kubernetes pod security\nrestricted privileges" as k8ssecurity
+  rectangle "Image provenance\nand SBOM generation" as supplychain
+  rectangle "Health checks and\nOpenTelemetry instrumentation" as observability
+  rectangle "KHIE facility, consent,\nand clinical-workflow controls" as khiecontrols
+}
+
+package "Code / configuration evidence" {
+  artifact "packages/server\nFHIR API and repository" as servercode
+  artifact "packages/app/Dockerfile\nDockerfile" as dockerfiles
+  artifact "charts/values.yaml" as helm
+  artifact "scripts/build-docker-*.sh\nscripts/deploy-server.sh" as scripts
+  artifact "packages/server/src/otel" as otelcode
+  artifact "jalihealth-khie-core\njalihealth-khie-bots\njalihealth-khie-react" as khiecode
+}
+
+package "Generated or persistent evidence" {
+  database "PostgreSQL FHIR resources\nClaim, Task, Encounter, Audit-capable\nplatform resources" as fhirevidence
+  artifact "Container image digest\nprovenance and SBOM" as imageevidence
+  artifact "Kubernetes deployment and\npod security configuration" as k8sevidence
+  artifact "Health responses, logs,\nmetrics and traces" as opsevidence
+  database "KHIE workflow state\nfacility identifiers, consent token,\nTask transitions, encounter history" as khieevidence
+}
+
+package "Required external governance" {
+  rectangle "Identity-provider configuration\naccess reviews and least privilege" as governance
+  rectangle "Secrets management, TLS,\nnetwork isolation, backup and DR" as operations
+  rectangle "Log retention, audit review,\nprivacy and data-lifecycle policy" as policy
+  rectangle "Security assessment, regulatory\ninterpretation, certification" as assurance
+}
+
+fhir --> servercode
+identity --> servercode
+container --> dockerfiles
+k8ssecurity --> helm
+supplychain --> scripts
+observability --> otelcode
+khiecontrols --> khiecode
+
+servercode --> fhirevidence
+dockerfiles --> imageevidence
+scripts --> imageevidence
+helm --> k8sevidence
+otelcode --> opsevidence
+khiecode --> khieevidence
+
+identity ..> governance
+fhir ..> policy
+container ..> operations
+k8ssecurity ..> operations
+supplychain ..> operations
+observability ..> operations
+khiecontrols ..> policy
+
+fhir ..> assurance : no certification implied
+identity ..> assurance : no certification implied
+container ..> assurance : no certification implied
+k8ssecurity ..> assurance : no certification implied
+supplychain ..> assurance : no certification implied
+observability ..> assurance : no certification implied
+khiecontrols ..> assurance : no certification implied
+
+legend right
+Solid arrows: verified implementation-to-evidence relationships.
+Dotted arrows: governance or assurance dependencies outside code.
+
+The diagram documents technical controls and available evidence.
+It does not constitute a compliance certification or audit finding.
+endlegend
+@enduml

@@ -1,0 +1,65 @@
+@startuml
+title SHIF Inpatient Workflow: Admission, Transfer, and Discharge
+autonumber
+skinparam shadowing false
+
+actor "Clinical user" as user
+participant "KhieInpatientWorkflow" as ui
+participant "Inpatient bots" as bot
+database "Medplum FHIR repository" as fhir
+participant "KHIE API" as khie
+
+user -> ui : choose per-diem or FFS\nselect ward/bed and intervention
+ui -> bot : startShifInpatient
+bot -> khie : eligibility and interventions
+bot -> bot : validate SHIF + IP + payment mechanism
+
+alt per-diem
+  bot -> fhir : create Encounter(in-progress)\nCoverage, Claim(draft), Task(admission consent required)
+else FFS same-day
+  bot -> fhir : create Encounter(in-progress)\nCoverage, Claim(draft), Task(same-day preauth required)
+else FFS elective
+  bot -> fhir : create Encounter(planned)\nCoverage, Claim(draft), Task(elective preauth required)
+end
+bot --> ui : payer case identifiers
+
+user -> ui : OTP or biometric authorization
+ui -> bot : createShifInpatientVisit
+bot -> khie : create visit / obtain authorization
+bot -> fhir : persist consent token when returned\nupdate Task status
+
+opt FFS preauthorization
+  user -> ui : submit / authorize preauth
+  ui -> bot : submit or authorize preauth
+  bot -> khie : preauthorization operation
+  bot -> fhir : update Task business status
+  user -> ui : refresh status
+  ui -> bot : refresh preauth
+  bot -> khie : get preauth status
+end
+
+user -> ui : add billing
+ui -> bot : addShifInpatientBilling
+bot -> khie : add claim billing
+bot -> fhir : Task = billing-lines-added
+
+opt ward transfer
+  user -> ui : choose destination ward and intervention
+  ui -> bot : switchShifInpatientIntervention
+  bot -> bot : require in-progress Encounter\nreject currently active ward
+  bot -> khie : POST /claims/interventions/switch
+  bot -> fhir : close active Encounter.location\nappend active destination location\nupdate Task intervention code
+end
+
+user -> ui : send discharge OTP
+ui -> bot : sendShifInpatientDischargeOtp
+bot -> khie : POST /claims/otp/discharge
+bot -> fhir : Task = discharge-otp-sent
+
+user -> ui : discharge with OTP or biometric authorization
+ui -> bot : dischargeShifInpatient
+bot -> bot : require billing and consent\nrequire next-of-kin when deceased
+bot -> khie : preview claim
+bot -> khie : POST /claims/discharge
+bot -> fhir : Claim = active\nTask = completed / claim-submitted
+@enduml

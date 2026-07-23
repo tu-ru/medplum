@@ -1,0 +1,74 @@
+@startuml
+title KHIE Compliance-Oriented Control and Evidence Traceability
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "Implemented controls" {
+  rectangle "Active KHIE facility\nresolution" as facility
+  rectangle "PractitionerRole\nfacility assignment check" as assignment
+  rectangle "Consent-token\npersistence and reuse" as consent
+  rectangle "Task / Claim\nworkflow state" as state
+  rectangle "ECCIF identity\nbranching and reconciliation" as identity
+  rectangle "Inpatient discharge\nand transfer guards" as clinical
+}
+
+package "Code evidence" {
+  artifact "core/resolution.ts\nresolveFacilityContext\nassertUserAssignedToFacility" as resolution
+  artifact "bots/context.ts\ngetKhieWorkflowContext" as context
+  artifact "bots/payer-case.ts\nECCIF case helper" as payercase
+  artifact "bots/create-eccif-emergency-claim.ts\nidentify-eccif-emergency-patient.ts" as eccif
+  artifact "bots/switch-shif-inpatient-intervention.ts\ndischarge-shif-inpatient.ts" as inpatient
+}
+
+package "Persisted / emitted evidence" {
+  database "Location KHIE identifier\nand integration extension" as locationEvidence
+  database "Claim identifier\nKHIE consent token" as tokenEvidence
+  database "Task business status\nand workflow inputs" as taskEvidence
+  database "Encounter.location history" as encounterEvidence
+  database "KHIE API call metadata\nmethod, path, status, correlation ID" as apiEvidence
+}
+
+package "Operational dependencies\nnot satisfied by these modules alone" {
+  rectangle "Deployment secret management\nendpoint configuration\ntransport controls" as deployment
+  rectangle "Medplum authorization policies\naudit configuration\ndata lifecycle governance" as governance
+  rectangle "External regulatory assessment\nand certification" as certification
+}
+
+facility --> resolution
+assignment --> resolution
+assignment --> context
+consent --> payercase
+state --> payercase
+identity --> eccif
+clinical --> inpatient
+
+resolution --> locationEvidence
+payercase --> tokenEvidence
+payercase --> taskEvidence
+eccif --> tokenEvidence
+eccif --> taskEvidence
+inpatient --> encounterEvidence
+context --> apiEvidence
+
+facility ..> deployment : requires configuration
+assignment ..> governance : complements
+consent ..> governance : requires retention policy
+state ..> governance : requires access and audit policy
+identity ..> governance : requires privacy and lifecycle policy
+facility ..> certification : not an attestation
+assignment ..> certification : not an attestation
+consent ..> certification : not an attestation
+state ..> certification : not an attestation
+identity ..> certification : not an attestation
+clinical ..> certification : not an attestation
+
+legend right
+<b>Reading the diagram</b>
+Solid arrows: implementation-to-evidence traceability.
+Dotted arrows: dependencies or limits outside this module set.
+
+These controls are code-level evidence only.
+They do not establish regulatory certification.
+endlegend
+@enduml

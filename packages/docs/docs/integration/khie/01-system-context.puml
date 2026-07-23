@@ -1,0 +1,42 @@
+@startuml
+title KHIE Payer Workflow System Context
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "Clinical user" as clinician
+component "JaliHealth React workflows\n- Outpatient\n- Inpatient\n- ECCIF emergency" as react
+component "Medplum Bot runtime\nKHIE workflow handlers" as bots
+component "KHIE core client\nFacility resolution\nOAuth token cache\nAPI wrappers" as core
+database "Medplum FHIR repository\nPatient, PractitionerRole, Location\nEncounter, Coverage, Claim, Task" as fhir
+cloud "KHIE API\nEligibility, claims, preauth\nEmergency, protocol endpoints" as khie
+database "KHIE token endpoint" as token
+
+rectangle "JaliHealth / Medplum trust boundary" {
+  react
+  bots
+  core
+  fhir
+}
+
+clinician --> react : clinical workflow actions
+react --> bots : executeBot(input)
+bots --> fhir : read / create / update FHIR resources
+bots --> core : resolve context and call client
+core --> fhir : load facility / role context
+core --> token : OAuth client credentials
+core --> khie : authenticated REST calls\nfacility headers when configured
+
+note bottom of fhir
+Claims persist KHIE consent tokens after a KHIE
+authorization or emergency response supplies one.
+Tasks retain business status and workflow inputs.
+end note
+
+note bottom of core
+The resolved facility is selected by precedence:
+encounter, patient location, selected location,
+role default, organization default.
+end note
+@enduml

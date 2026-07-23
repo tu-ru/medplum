@@ -1,0 +1,45 @@
+@startuml
+title Medplum Delivery, Runtime Health, and Operations Lifecycle
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "Engineer" as engineer
+component "npm workspaces\nTurborepo" as workspace
+component "TypeScript builds\nserver and app artifacts" as build
+component "Docker buildx" as buildx
+artifact "Server image\nNode hardened base\nlinux/amd64 + linux/arm64" as serverimage
+artifact "App image\nnon-root Nginx\nstatic React assets" as appimage
+artifact "Image provenance + SBOM\nbuild attestations" as attestations
+component "Deployment automation\nECS task-definition revision\nor Helm release" as deploy
+component "Runtime health endpoint\n/healthcheck" as health
+component "OpenTelemetry\nserver instrumentation" as otel
+cloud "Metrics collector /\nobservability backend" as observability
+database "PostgreSQL" as postgres
+database "Redis" as redis
+
+engineer --> workspace : npm ci, build, test commands
+workspace --> build : build package artifacts
+build --> buildx : package container inputs
+buildx --> serverimage
+buildx --> appimage
+buildx --> attestations
+serverimage --> deploy
+appimage --> deploy
+deploy --> health : start / replace runtime instances
+health --> postgres : verifies dependency readiness\nin local server healthcheck
+health --> redis : verifies dependency readiness\nin local server healthcheck
+deploy --> otel : runtime emits service telemetry
+otel --> observability
+
+note bottom of buildx
+The image build scripts request provenance and SBOM attestations.
+Those attestations support supply-chain evidence but do not replace
+deployment approval, vulnerability management, or runtime monitoring.
+end note
+
+note bottom of deploy
+ECS deployment script pins services to an immutable image digest.
+Helm supports version-pinned releases and waits for readiness.
+end note
+@enduml
